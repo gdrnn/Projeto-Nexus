@@ -1,0 +1,6 @@
+{
+  "name": "Project Nexus",
+  "description": "Plataforma moderna e minimalista para transformar ideias em projetos reais com IA, login seguro, simulador e notificações push.",
+  "requestFramePermissions": ["notifications"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

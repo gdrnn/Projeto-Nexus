@@ -1,0 +1,27 @@
+{
+  "id": "/",
+  "name": "Project Nexus — Da Ideia à Realidade",
+  "short_name": "Nexus",
+  "description": "Plataforma moderna e minimalista para transformar ideias em projetos reais com IA, login seguro e notificações push.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#07090e",
+  "background_color": "#07090e",
+  "categories": ["productivity", "business"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
