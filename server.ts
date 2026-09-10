@@ -37,27 +37,41 @@ async function callGeminiAPI(params: {
       },
     });
 
-    // We try gemini-3.1-flash-lite first for rapid, high-throughput conversational responses,
+    // We try gemini-3.1-flash-lite first for rapid, high-throughput responses,
     // and fallback to gemini-3.8-flash if needed.
     const modelsToTry = ["gemini-3.1-flash-lite", "gemini-3.8-flash"];
 
     for (const model of modelsToTry) {
       try {
-        const response = await ai.models.generateContent({
-          model,
-          contents: params.prompt,
-          config: {
-            systemInstruction: params.systemInstruction,
-            temperature: params.temperature ?? 0.7,
-          },
-        });
+        // Enforce a strict 9-second timeout per model so requests never hang
+        const timeoutPromise = new Promise<null>((resolve) =>
+          setTimeout(() => resolve(null), 9000)
+        );
 
-        const text = response.text?.trim();
-        if (text) {
-          return { text, model };
+        const generatePromise = ai.models
+          .generateContent({
+            model,
+            contents: params.prompt,
+            config: {
+              systemInstruction: params.systemInstruction,
+              temperature: params.temperature ?? 0.7,
+            },
+          })
+          .then((res) => ({ text: res.text?.trim() || "", model }))
+          .catch((err) => {
+            console.warn(
+              `[Project Nexus] Model ${model} encountered an issue:`,
+              err?.status || err?.message
+            );
+            return null;
+          });
+
+        const result = await Promise.race([generatePromise, timeoutPromise]);
+        if (result && result.text) {
+          return result;
         }
       } catch (err: any) {
-        console.warn(`[Project Nexus] Model ${model} encountered an issue:`, err?.status || err?.message);
+        console.warn(`[Project Nexus] Model ${model} execution error:`, err?.status || err?.message);
       }
     }
   } catch (initErr: any) {
@@ -230,9 +244,16 @@ Analisei sua proposta sob as melhores práticas de gestão de projetos e viabili
 
 // Nexus AI Project analysis endpoint
 app.post("/api/analyze-project", async (req, res) => {
-  const { name, category, description, budget, deadline } = req.body;
+  try {
+    const {
+      name = "Novo Projeto",
+      category = "Startup & SaaS",
+      description = "",
+      budget = 35000,
+      deadline = 90,
+    } = req.body || {};
 
-  const prompt = `Analise o projeto abaixo e forneça um plano em formato de tópicos objetivos:
+    const prompt = `Analise o projeto abaixo e forneça um plano em formato de tópicos objetivos:
 Nome: ${name}
 Categoria: ${category}
 Descrição: ${description}
@@ -246,45 +267,45 @@ Forneça:
 4. 3 Principais Riscos e Mitigações
 5. Nota de Viabilidade Geral de 0 a 100% com justificativa fundamentada.`;
 
-  const geminiResult = await callGeminiAPI({
-    prompt,
-    systemInstruction:
-      "Você é o analista sênior de projetos do Project Nexus. Seja conciso, cirúrgico, estruturado e focado em viabilidade real de execução.",
-    temperature: 0.6,
-  });
-
-  if (geminiResult) {
-    // Extract viability score if present
-    const scoreMatch = geminiResult.text.match(/(\d{1,3})%/);
-    const viabilityScore = scoreMatch ? parseInt(scoreMatch[1], 10) : 78;
-
-    res.json({
-      analysis: geminiResult.text,
-      source: "gemini",
-      model: geminiResult.model,
-      viabilityScore: Math.min(100, Math.max(10, viabilityScore)),
+    const geminiResult = await callGeminiAPI({
+      prompt,
+      systemInstruction:
+        "Você é o analista sênior de projetos do Project Nexus. Seja conciso, cirúrgico, estruturado e focado em viabilidade real de execução.",
+      temperature: 0.6,
     });
-    return;
-  }
 
-  // Fallback analytical generator
-  const budgetNum = Number(budget) || 30000;
-  const deadlineNum = Number(deadline) || 90;
+    if (geminiResult) {
+      // Extract viability score if present
+      const scoreMatch = geminiResult.text.match(/(\d{1,3})%/);
+      const viabilityScore = scoreMatch ? parseInt(scoreMatch[1], 10) : 78;
 
-  let viabilityScore = 72;
-  if (budgetNum >= 40000) viabilityScore += 10;
-  if (budgetNum < 15000) viabilityScore -= 15;
-  if (deadlineNum >= 60) viabilityScore += 8;
-  if (deadlineNum < 40) viabilityScore -= 12;
-  viabilityScore = Math.min(96, Math.max(35, viabilityScore));
+      res.json({
+        analysis: geminiResult.text,
+        source: "gemini",
+        model: geminiResult.model,
+        viabilityScore: Math.min(100, Math.max(10, viabilityScore)),
+      });
+      return;
+    }
 
-  const p1 = Math.round(deadlineNum * 0.15);
-  const p2 = Math.round(deadlineNum * 0.2);
-  const p3 = Math.round(deadlineNum * 0.35);
-  const p4 = Math.round(deadlineNum * 0.15);
-  const p5 = deadlineNum - (p1 + p2 + p3 + p4);
+    // Fallback analytical generator
+    const budgetNum = Number(budget) || 30000;
+    const deadlineNum = Number(deadline) || 90;
 
-  const fallbackAnalysis = `### 📊 Diagnóstico Estruturado pelo Nexus AI
+    let viabilityScore = 72;
+    if (budgetNum >= 40000) viabilityScore += 10;
+    if (budgetNum < 15000) viabilityScore -= 15;
+    if (deadlineNum >= 60) viabilityScore += 8;
+    if (deadlineNum < 40) viabilityScore -= 12;
+    viabilityScore = Math.min(96, Math.max(35, viabilityScore));
+
+    const p1 = Math.round(deadlineNum * 0.15);
+    const p2 = Math.round(deadlineNum * 0.2);
+    const p3 = Math.round(deadlineNum * 0.35);
+    const p4 = Math.round(deadlineNum * 0.15);
+    const p5 = Math.max(5, deadlineNum - (p1 + p2 + p3 + p4));
+
+    const fallbackAnalysis = `### 📊 Diagnóstico Estruturado pelo Nexus AI
 
 **Resumo Executivo:**
 O projeto **${name}** na categoria **${category}** tem alto potencial de execução quando estruturado em ciclos ágeis. Com R$ ${budgetNum.toLocaleString("pt-BR")} e ${deadlineNum} dias de prazo, é possível entregar uma versão robusta sem comprometer a liquidez operacional.
@@ -303,11 +324,19 @@ O projeto **${name}** na categoria **${category}** tem alto potencial de execuç
 
 **Viabilidade Geral Calculada:** **${viabilityScore}%** (Cenário ${viabilityScore >= 75 ? "muito favorável" : "equilibrado com atenção aos custos"}).`;
 
-  res.json({
-    analysis: fallbackAnalysis,
-    source: "local",
-    viabilityScore,
-  });
+    res.json({
+      analysis: fallbackAnalysis,
+      source: "local",
+      viabilityScore,
+    });
+  } catch (endpointErr: any) {
+    console.error("[Project Nexus] Erro crítico no endpoint /api/analyze-project:", endpointErr?.message);
+    res.json({
+      analysis: `### 📊 Diagnóstico do Nexus AI\n\n**Resumo Executivo:**\nO projeto foi estruturado com base nas melhores práticas ágeis. O foco deve ser na validação com os primeiros clientes e execução do MVP.\n\n**Viabilidade Geral:** 75%`,
+      source: "local",
+      viabilityScore: 75,
+    });
+  }
 });
 
 // Vite middleware & static serving
