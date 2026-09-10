@@ -85,12 +85,23 @@ export interface Achievement {
   unlockedAt?: string;
 }
 
+export type ChatMode =
+  | "general"
+  | "architect"
+  | "finance"
+  | "tech"
+  | "risks"
+  | "growth";
+
 export interface ChatMessage {
   id: string;
   sender: "user" | "ai";
   text: string;
   timestamp: string;
   source?: "gemini" | "local";
+  model?: string;
+  mode?: ChatMode;
+  followUps?: string[];
 }
 
 export interface SimulatorState {

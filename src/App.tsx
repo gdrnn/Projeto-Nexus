@@ -101,6 +101,26 @@ export default function App() {
     Storage.saveNotifications(notifications);
   }, [notifications]);
 
+  const [projectPrefill, setProjectPrefill] = useState<{
+    name?: string;
+    category?: string;
+    description?: string;
+    budget?: number;
+    deadline?: number;
+  } | null>(null);
+
+  const handleSendToProjectCreator = (prefill: {
+    name?: string;
+    category?: string;
+    description?: string;
+    budget?: number;
+    deadline?: number;
+  }) => {
+    setProjectPrefill(prefill);
+    handleNavigate("projeto");
+    showToast(`Plano '${prefill.name || "analisado"}' transferido para o Estúdio de Projetos!`);
+  };
+
   // Active Project object
   const activeProject = projects.find((p) => p.id === activeProjectId) || projects[0] || null;
 
@@ -304,7 +324,11 @@ export default function App() {
         <Recursos onNavigate={handleNavigate} />
 
         {/* 3. Nexus AI Chat Console */}
-        <NexusAIChat currentUser={currentUser} showToast={showToast} />
+        <NexusAIChat
+          currentUser={currentUser}
+          showToast={showToast}
+          onSendToProjectCreator={handleSendToProjectCreator}
+        />
 
         {/* 4. Project Creator & Manager */}
         <ProjectCreator
@@ -319,6 +343,7 @@ export default function App() {
           onDeleteProject={handleDeleteProject}
           showToast={showToast}
           onOpenAuth={() => setIsAuthOpen(true)}
+          prefillData={projectPrefill}
         />
 
         {/* 5. Roadmap & Topological Map */}

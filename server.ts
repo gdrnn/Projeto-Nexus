@@ -18,66 +18,124 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
+// Helper to call Gemini with graceful multi-model fallback (gemini-3.1-flash-lite / gemini-3.8-flash)
+async function callGeminiAPI(params: {
+  prompt: string;
+  systemInstruction: string;
+  temperature?: number;
+}): Promise<{ text: string; model: string } | null> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return null;
+
+  try {
+    const ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          "User-Agent": "aistudio-build",
+        },
+      },
+    });
+
+    // We try gemini-3.1-flash-lite first for rapid, high-throughput conversational responses,
+    // and fallback to gemini-3.8-flash if needed.
+    const modelsToTry = ["gemini-3.1-flash-lite", "gemini-3.8-flash"];
+
+    for (const model of modelsToTry) {
+      try {
+        const response = await ai.models.generateContent({
+          model,
+          contents: params.prompt,
+          config: {
+            systemInstruction: params.systemInstruction,
+            temperature: params.temperature ?? 0.7,
+          },
+        });
+
+        const text = response.text?.trim();
+        if (text) {
+          return { text, model };
+        }
+      } catch (err: any) {
+        console.warn(`[Project Nexus] Model ${model} encountered an issue:`, err?.status || err?.message);
+      }
+    }
+  } catch (initErr: any) {
+    console.error("[Project Nexus] Gemini client initialization failed:", initErr?.message);
+  }
+
+  return null;
+}
+
+// Personas / Modes system instructions dictionary
+const MODE_INSTRUCTIONS: Record<string, string> = {
+  general:
+    "Você é o Nexus AI, motor de inteligência e arquiteto executivo do Project Nexus. Seu objetivo é dialogar livremente com o usuário sobre qualquer ideia de negócio, projeto ou iniciativa, transformando visões abstratas em planos executáveis, viáveis e altamente estruturados.",
+  architect:
+    "Você é o Nexus AI atuando como Arquiteto de Negócios e Estrategista de Startups. Seu foco é validação rápida de hipóteses, desenho de Menor Produto Viável (MVP), proposta única de valor (UVP) e modelagem de modelo de negócio (B2B, B2C, Marketplace, Assinatura).",
+  finance:
+    "Você é o Nexus AI atuando como CFO e Consultor Financeiro de Projetos. Seu foco é detalhar investimentos em Reais (R$), estrutura de custos fixos e variáveis, fluxo de caixa, precificação, projeção de ponto de equilíbrio (break-even) e métricas unitárias (CAC, LTV).",
+  tech:
+    "Você é o Nexus AI atuando como CTO e Arquiteto de Software. Seu foco é sugerir a stack tecnológica moderna ideal, infraestrutura escalável, segurança, estimativas de sprints, riscos de engenharia e facilidade de manutenção.",
+  risks:
+    "Você é o Nexus AI atuando como Auditor de Riscos e Governança de Projetos. Seu foco é identificar vulnerabilidades financeiras, regulatórias, jurídicas, de concorrência e operacionais, fornecendo planos de contingência práticos e mitigação ágil.",
+  growth:
+    "Você é o Nexus AI atuando como Especialista em Growth & Go-to-Market. Seu foco é aquisição dos primeiros clientes (estratégia 0 a 100), canais de tração, SEO, campanhas digitais, posicionamento de marca e retenção.",
+};
+
 // Nexus AI Chat endpoint
 app.post("/api/chat", async (req, res) => {
-  const { message, history } = req.body;
+  const { message, history, mode = "general" } = req.body;
 
   if (!message || typeof message !== "string") {
     res.status(400).json({ error: "Mensagem obrigatória." });
     return;
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  // Format multi-turn context
+  const historyArray = Array.isArray(history) ? history.slice(-8) : [];
+  const conversationContext = historyArray
+    .map((item: { sender: string; text: string }) => {
+      const senderLabel = item.sender === "user" ? "Usuário" : "Nexus AI";
+      return `${senderLabel}: ${item.text}`;
+    })
+    .join("\n\n");
 
-  if (apiKey) {
-    try {
-      const ai = new GoogleGenAI({
-        apiKey,
-        httpOptions: {
-          headers: {
-            "User-Agent": "aistudio-build",
-          },
-        },
-      });
+  const baseInstruction = MODE_INSTRUCTIONS[mode] || MODE_INSTRUCTIONS.general;
+  const fullSystemInstruction = `${baseInstruction}
+Diretrizes fundamentais:
+- Responda em Português do Brasil com tom executivo, moderno, empático, encorajador e prático.
+- NÃO se limite a respostas prontas nem bloqueie perguntas. Responda a QUALQUER pergunta, dúvida, cenário hipotético ou detalhe que o usuário trouxer.
+- Estruture com Markdown elegante: utilize negrito para conceitos-chave, listas para etapas e separadores quando oportuno.
+- Forneça estimativas realistas (valores em R$, semanas/meses de prazo e composição de equipe) sempre que relevante.
+- Mantenha continuidade: se o usuário estiver continuando uma conversa anterior, faça referência aos pontos discutidos.
+- Sempre conclua a resposta oferecendo 2 ou 3 sugestões curtas de perguntas que o usuário pode fazer para continuar explorando, sinalizadas por:
+"💡 **Para onde deseja avançar?**" seguido das opções em marcadores curtos.`;
 
-      // Prepare conversation history context
-      const formattedHistory = Array.isArray(history)
-        ? history
-            .slice(-6)
-            .map((h: { sender: string; text: string }) => `${h.sender === "user" ? "Usuário" : "Nexus AI"}: ${h.text}`)
-            .join("\n")
-        : "";
+  const prompt = conversationContext
+    ? `Histórico recente da conversa com o usuário:
+${conversationContext}
 
-      const prompt = `Contexto anterior da conversa:
-${formattedHistory}
+Nova mensagem do usuário:
+${message}`
+    : message;
 
-Mensagem do usuário:
-${message}
+  const geminiResult = await callGeminiAPI({
+    prompt,
+    systemInstruction: fullSystemInstruction,
+    temperature: 0.7,
+  });
 
-Instruções para o Nexus AI:
-- Você é o motor de inteligência do Project Nexus: uma plataforma que transforma qualquer ideia em um projeto real, executável e validado.
-- Responda de forma profissional, moderna, encorajadora e altamente prática em Português do Brasil.
-- Estruture a resposta com tópicos claros, estimativas realistas (orçamento, prazos, equipe, riscos) e próximos passos.
-- Utilize formatação Markdown (negrito, listas e tópicos).`;
-
-      const response = await ai.models.generateContent({
-        model: "gemini-3.8-flash",
-        contents: prompt,
-        config: {
-          systemInstruction:
-            "Você é o Nexus AI, especialista em ideação, estruturação de startups, gestão ágil e arquitetura de projetos.",
-        },
-      });
-
-      const replyText = response.text || "Não foi possível formular uma resposta no momento.";
-      res.json({ reply: replyText, source: "gemini" });
-      return;
-    } catch (err: any) {
-      console.warn("Gemini call failed, falling back to local engine:", err?.message);
-    }
+  if (geminiResult) {
+    res.json({
+      reply: geminiResult.text,
+      source: "gemini",
+      model: geminiResult.model,
+    });
+    return;
   }
 
-  // Fallback intelligent responder based on query topics
+  // Fallback intelligent responder based on query topics (only if API key is missing or offline)
   const text = message.toLowerCase();
   let reply = "";
 
@@ -93,7 +151,12 @@ Para uma cafeteria moderna com foco em experiência do cliente:
    - *Semana 6-8:* Homologação de torrefadores parceiros e treinamento de baristas.
    - *Semana 9-12:* Testes operacionais (soft-opening) e campanha de lançamento local.
 3. **Riscos Principais:** Custo fixo do ponto e perda de insumos perecíveis.
-4. **Dica Nexus:** Desenvolva um programa de fidelidade digital desde o dia 1 para garantir recorrência.`;
+4. **Dica Nexus:** Desenvolva um programa de fidelidade digital desde o dia 1 para garantir recorrência.
+
+💡 **Para onde deseja avançar?**
+- Como escolher os maquinários com menor custo de manutenção?
+- Qual a margem média esperada para cafés especiais?
+- Como montar o evento de inauguração com custo zero?`;
   } else if (text.includes("app") || text.includes("aplicativo") || text.includes("software") || text.includes("saas")) {
     reply = `📱 **Plano de Estruturação de Aplicativo:**
 
@@ -105,7 +168,12 @@ Para transformar sua ideia de software em um produto viável e escalável (MVP):
    - **Fase 3 (Beta Fechado):** 50 usuários pioneiros medindo retenção e taxa de conclusão de tarefas.
    - **Fase 4 (Go-to-Market):** Estratégia de aquisição orgânica e canais de tração.
 2. **Equipe Inicial Recomendada:** 1 Product Designer + 1 Fullstack Engineer + 1 Growth/Estrategista.
-3. **Prazo de Lançamento:** 60 a 90 dias para a primeira versão pública.`;
+3. **Prazo de Lançamento:** 60 a 90 dias para a primeira versão pública.
+
+💡 **Para onde deseja avançar?**
+- Qual modelo de monetização se encaixa melhor no seu app?
+- Como recrutar os primeiros 50 usuários de teste?
+- Quais ferramentas no-code podem acelerar seu protótipo?`;
   } else if (text.includes("loja") || text.includes("e-commerce") || text.includes("vender") || text.includes("marca")) {
     reply = `🛍️ **Estruturação de E-commerce / Varejo Digital:**
 
@@ -114,14 +182,22 @@ Para transformar sua ideia de software em um produto viável e escalável (MVP):
    - **CAC vs LTV:** Manter o Custo de Aquisição abaixo de 30% da margem bruta.
    - **Logística Rápida:** Integração com fulfillment e transportadoras eficientes.
    - **Políticas de Troca Claras:** Reduz a fricção e aumenta a confiança na primeira compra.
-3. **Próxima Ação:** Cadastre os primeiros 3 produtos e teste campanhas de pré-venda com landing page.`;
+3. **Próxima Ação:** Cadastre os primeiros 3 produtos e teste campanhas de pré-venda com landing page.
+
+💡 **Para onde deseja avançar?**
+- É melhor começar com estoque próprio ou dropshipping?
+- Como planejar a verba de anúncios no Instagram e Google?`;
   } else if (text.includes("risco") || text.includes("perigo") || text.includes("problema")) {
     reply = `⚠️ **Matriz de Riscos Nexus:**
 
 1. 🔴 **Risco Financeiro:** Esgotamento de caixa antes da validação da tração comercial. *Mitigação: Manter reserva de contingência de pelo menos 20% do orçamento.*
 2. 🟠 **Risco Operacional:** Atrasos no cronograma de fornecedores ou entregas técnicas. *Mitigação: Definir marcos semanais com prazos elásticos.*
 3. 🟡 **Risco de Mercado:** O cliente achar o produto interessante, mas não estar disposto a pagar. *Mitigação: Pré-venda ou cartas de intenção antecipadas.*
-4. 🔵 **Risco Técnico:** Complexidade inesperada na execução. *Mitigação: Comece pelo Menor Produto Viável (MVP).*`;
+4. 🔵 **Risco Técnico:** Complexidade inesperada na execução. *Mitigação: Comece pelo Menor Produto Viável (MVP).*
+
+💡 **Para onde deseja avançar?**
+- Como estruturar um plano B caso o orçamento aperte?
+- Como validar a disposição a pagar antes de produzir?`;
   } else if (text.includes("investimento") || text.includes("orçamento") || text.includes("dinheiro") || text.includes("custo")) {
     reply = `💰 **Distribuição Estratégica de Capital (Recomendação Nexus):**
 
@@ -141,30 +217,22 @@ Analisei sua proposta sob as melhores práticas de gestão de projetos e viabili
    - Validação com clientes reais antes de despender grandes volumes financeiros.
    - Construção ágil em 3 ciclos quinzenais (Sprints).
    - Coleta contínua de métricas de uso e satisfação.
-3. **Recomendação Imediata:** Clique em **"Projetos"** para registrar este escopo e utilizar nosso simulador de cenários para equilibrar orçamento, equipe e prazo!`;
+3. **Recomendação Imediata:** Clique em **"Projetos"** para registrar este escopo e utilizar nosso simulador de cenários para equilibrar orçamento, equipe e prazo!
+
+💡 **Para onde deseja avançar?**
+- Descreva seu público-alvo principal para refinarmos o posicionamento.
+- Deseja calcular o investimento inicial estimado?
+- Quer definir um cronograma de 90 dias passo a passo?`;
   }
 
-  res.json({ reply, source: "local" });
+  res.json({ reply, source: "local", model: "nexus-local-v1" });
 });
 
 // Nexus AI Project analysis endpoint
 app.post("/api/analyze-project", async (req, res) => {
   const { name, category, description, budget, deadline } = req.body;
 
-  const apiKey = process.env.GEMINI_API_KEY;
-
-  if (apiKey) {
-    try {
-      const ai = new GoogleGenAI({
-        apiKey,
-        httpOptions: {
-          headers: {
-            "User-Agent": "aistudio-build",
-          },
-        },
-      });
-
-      const prompt = `Analise o projeto abaixo e forneça um plano em formato de tópicos objetivos:
+  const prompt = `Analise o projeto abaixo e forneça um plano em formato de tópicos objetivos:
 Nome: ${name}
 Categoria: ${category}
 Descrição: ${description}
@@ -172,29 +240,31 @@ Orçamento Disponível: R$ ${budget}
 Prazo em dias: ${deadline}
 
 Forneça:
-1. Resumo Executivo da Ideia (2 frases)
+1. Resumo Executivo da Ideia (2 frases de impacto)
 2. 5 Etapas Claras (Pesquisa, Planejamento, Desenvolvimento, Testes, Lançamento) com estimativa de dias cada
 3. Equipe Mínima Recomendada
 4. 3 Principais Riscos e Mitigações
-5. Nota de Viabilidade Geral de 0 a 100% com justificativa.`;
+5. Nota de Viabilidade Geral de 0 a 100% com justificativa fundamentada.`;
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3.8-flash",
-        contents: prompt,
-        config: {
-          systemInstruction:
-            "Você é o analista sênior de projetos do Project Nexus. Seja conciso, cirúrgico e focado em viabilidade.",
-        },
-      });
+  const geminiResult = await callGeminiAPI({
+    prompt,
+    systemInstruction:
+      "Você é o analista sênior de projetos do Project Nexus. Seja conciso, cirúrgico, estruturado e focado em viabilidade real de execução.",
+    temperature: 0.6,
+  });
 
-      res.json({
-        analysis: response.text,
-        source: "gemini",
-      });
-      return;
-    } catch (err: any) {
-      console.warn("Analyze project Gemini error, falling back:", err?.message);
-    }
+  if (geminiResult) {
+    // Extract viability score if present
+    const scoreMatch = geminiResult.text.match(/(\d{1,3})%/);
+    const viabilityScore = scoreMatch ? parseInt(scoreMatch[1], 10) : 78;
+
+    res.json({
+      analysis: geminiResult.text,
+      source: "gemini",
+      model: geminiResult.model,
+      viabilityScore: Math.min(100, Math.max(10, viabilityScore)),
+    });
+    return;
   }
 
   // Fallback analytical generator

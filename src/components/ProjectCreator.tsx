@@ -23,6 +23,13 @@ interface ProjectCreatorProps {
   onDeleteProject: (id: string) => void;
   showToast: (msg: string) => void;
   onOpenAuth: () => void;
+  prefillData?: {
+    name?: string;
+    category?: string;
+    description?: string;
+    budget?: number;
+    deadline?: number;
+  } | null;
 }
 
 export const ProjectCreator: React.FC<ProjectCreatorProps> = ({
@@ -34,9 +41,10 @@ export const ProjectCreator: React.FC<ProjectCreatorProps> = ({
   onDeleteProject,
   showToast,
   onOpenAuth,
+  prefillData,
 }) => {
   const [name, setName] = useState("");
-  const [category, setCategory] = useState("Startup");
+  const [category, setCategory] = useState("Startup & SaaS");
   const [description, setDescription] = useState("");
   const [budget, setBudget] = useState<number | string>(35000);
   const [deadline, setDeadline] = useState<number | string>(90);
@@ -47,6 +55,17 @@ export const ProjectCreator: React.FC<ProjectCreatorProps> = ({
     budgetNum: number;
     deadlineNum: number;
   } | null>(null);
+
+  // Apply prefill data whenever passed from Nexus AI Chat
+  React.useEffect(() => {
+    if (prefillData) {
+      if (prefillData.name) setName(prefillData.name);
+      if (prefillData.category) setCategory(prefillData.category);
+      if (prefillData.description) setDescription(prefillData.description);
+      if (prefillData.budget) setBudget(prefillData.budget);
+      if (prefillData.deadline) setDeadline(prefillData.deadline);
+    }
+  }, [prefillData]);
 
   const categories = [
     "Startup & SaaS",
