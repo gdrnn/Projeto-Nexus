@@ -53,6 +53,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const [isInstallDismissed, setIsInstallDismissed] = useState(false);
 
   const effectiveUnreadCount =
     unreadCount ??
@@ -138,17 +139,28 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right Header Actions */}
         <div className="flex items-center gap-2.5 sm:gap-3">
-          {/* PWA Install Button (if available) */}
-          {showInstall && installAction && (
-            <button
-              id="header-pwa-install-btn"
-              onClick={installAction}
-              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-semibold text-slate-200 border border-white/10 transition"
-              title="Instalar aplicativo"
-            >
-              <Download className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Instalar</span>
-            </button>
+          {/* PWA Install Button (if available and not dismissed) */}
+          {showInstall && installAction && !isInstallDismissed && (
+            <div className="hidden sm:inline-flex items-center rounded-lg bg-cyan-500/10 border border-cyan-500/25 p-0.5 transition">
+              <button
+                id="header-pwa-install-btn"
+                onClick={installAction}
+                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-cyan-300 hover:text-white transition cursor-pointer"
+                title="Instalar o Project Nexus como aplicativo no computador ou celular (PWA)"
+              >
+                <Download className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Instalar App</span>
+              </button>
+              <button
+                id="header-pwa-dismiss-btn"
+                onClick={() => setIsInstallDismissed(true)}
+                className="p-1 text-slate-400 hover:text-white hover:bg-white/10 rounded transition cursor-pointer"
+                title="Ocultar aviso de instalação"
+                aria-label="Ocultar botão de instalação"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
           )}
 
           {/* Notifications Bell */}

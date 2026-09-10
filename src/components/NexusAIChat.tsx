@@ -272,38 +272,79 @@ export const NexusAIChat: React.FC<NexusAIChatProps> = ({
         }),
       });
 
-      const data = await response.json();
-      const aiReply =
-        data.reply ||
-        "Compreendi sua proposta perfeitamente. Como você gostaria de aprofundar os detalhes?";
-
-      if (data.model) {
-        setLastModelUsed(data.model);
+      let data: any = null;
+      if (response.ok) {
+        try {
+          data = await response.json();
+        } catch {
+          data = null;
+        }
       }
 
-      const aiMessage: ChatMessage = {
-        id: `ai-${Date.now()}`,
-        sender: "ai",
-        text: aiReply,
-        timestamp: new Date().toISOString(),
-        source: data.source || "gemini",
-        model: data.model || "gemini-3.1-flash-lite",
-        mode: currentMode,
-      };
+      if (data && data.reply) {
+        if (data.model) {
+          setLastModelUsed(data.model);
+        }
 
-      setMessages((prev) => [...prev, aiMessage]);
-      playNotificationSound();
+        const aiMessage: ChatMessage = {
+          id: `ai-${Date.now()}`,
+          sender: "ai",
+          text: data.reply,
+          timestamp: new Date().toISOString(),
+          source: data.source || "gemini",
+          model: data.model || "gemini-3.8-flash",
+          mode: currentMode,
+        };
+
+        setMessages((prev) => [...prev, aiMessage]);
+        playNotificationSound();
+        return;
+      }
+
+      throw new Error(`Falha no endpoint /api/chat (status ${response.status})`);
     } catch (err) {
-      console.error("Chat error:", err);
+      console.warn("Nexus AI chat fallback ativado:", err);
+
+      const textLower = messageText.toLowerCase();
+      let fallbackText = "";
+
+      if (
+        textLower.includes("café") ||
+        textLower.includes("cafeteria") ||
+        textLower.includes("restaurante") ||
+        textLower.includes("comida")
+      ) {
+        fallbackText = `☕ **Plano de Viabilidade para Gastronomia & Cafeteria:**\n\n1. **Investimento Inicial Estimado:** Entre **R$ 45.000 e R$ 90.000** (maquinário profissional, reforma funcional e capital de giro).\n2. **Marcos Críticos em 90 dias:**\n   - *Dias 1-20:* Ponto comercial com alto fluxo e alvará sanitário.\n   - *Dias 21-50:* Seleção de fornecedores de grãos especiais e treinamento de baristas.\n   - *Dias 51-90:* Soft opening e marketing de experiência no Instagram.\n3. **Métrica Vital:** Margem de contribuição mínima de 65% em cafés e itens artesanais.\n\n💡 **Para onde deseja avançar?**\n- Como calcular o custo por xícara (ficha técnica)?\n- Estratégias para atrair clientes nos primeiros 30 dias\n- Equipamentos essenciais para começar enxuto`;
+      } else if (
+        textLower.includes("app") ||
+        textLower.includes("aplicativo") ||
+        textLower.includes("software") ||
+        textLower.includes("saas") ||
+        textLower.includes("sistema")
+      ) {
+        fallbackText = `📱 **Plano de Desenvolvimento Ágil (MVP Software / App):**\n\n1. **Fase 1 (Validação de Hipótese):** Entrevistas de dor com 20 clientes ideais e protótipo clicável no Figma.\n2. **Fase 2 (Construção do Core):** Desenvolva apenas o fluxo indispensável em 4 a 6 semanas.\n3. **Fase 3 (Beta com Early Adopters):** Lance para 50 usuários monitorando taxa de ativação e retenção.\n4. **Estimativa de Investimento:** R$ 15.000 a R$ 40.000 para validação técnica inicial.\n\n💡 **Para onde deseja avançar?**\n- Qual modelo de receita ideal (SaaS, Freemium ou Transacional)?\n- Como recrutar os primeiros 50 usuários beta gratuitamente?\n- Ferramentas modernas recomendadas para o MVP`;
+      } else if (
+        textLower.includes("loja") ||
+        textLower.includes("e-commerce") ||
+        textLower.includes("venda") ||
+        textLower.includes("produto")
+      ) {
+        fallbackText = `🛍️ **Estruturação de E-commerce & Varejo Moderno:**\n\n1. **Validação Rápida:** Lance uma campanha de pré-venda com página única antes de estocar grande volume.\n2. **Equilíbrio Financeiro:** Mantenha o CAC (Custo de Aquisição de Clientes) menor que 30% do Ticket Médio.\n3. **Logística:** Integre transportadoras com frete competitivo para reduzir abandono de carrinho.\n\n💡 **Para onde deseja avançar?**\n- Como planejar a verba de anúncios no Meta e Google Ads?\n- Estratégias para gerar compras recorrentes\n- Como precificar para garantir margem líquida saudável`;
+      } else {
+        fallbackText = `🧠 **Diagnóstico Estruturado pelo Nexus AI para:** "${messageText}"\n\nAnalisei sua solicitação sob os princípios de gestão ágil e viabilidade executiva:\n\n1. **Diretriz de Execução:** Transformar a ideia em entregas modulares de 15 dias para testar a adesão do público real.\n2. **Recomendação de Capital:** Reserve sempre 15% a 20% como contingência para ajustes de rota.\n3. **Próximo Passo:** Clique na aba **"Projetos"** para cadastrar este escopo e utilizar nosso simulador financeiro e matriz de riscos!\n\n💡 **Para onde deseja avançar?**\n- Deseja simular o cronograma ideal de 90 dias?\n- Como identificar os 3 principais riscos deste projeto?\n- Qual a equipe mínima necessária para executar?`;
+      }
+
       const fallbackMsg: ChatMessage = {
         id: `ai-${Date.now()}`,
         sender: "ai",
-        text: `Compreendi sua proposta: "${messageText}". Recomendo estruturarmos este escopo dividindo em 3 fases: Validação inicial, MVP e Tração comercial. Você pode registrar este projeto no Estúdio de Projetos para calcularmos o cronograma e orçamento exatos!`,
+        text: fallbackText,
         timestamp: new Date().toISOString(),
         source: "local",
         model: "nexus-local-v1",
+        mode: currentMode,
       };
       setMessages((prev) => [...prev, fallbackMsg]);
+      playNotificationSound();
     } finally {
       setIsLoading(false);
     }

@@ -37,9 +37,9 @@ async function callGeminiAPI(params: {
       },
     });
 
-    // We try gemini-3.1-flash-lite first for rapid, high-throughput responses,
-    // and fallback to gemini-3.8-flash if needed.
-    const modelsToTry = ["gemini-3.1-flash-lite", "gemini-3.8-flash"];
+    // We try gemini-3.8-flash first per official guidelines,
+    // and fallback to gemini-3.1-flash-lite if needed.
+    const modelsToTry = ["gemini-3.8-flash", "gemini-3.1-flash-lite"];
 
     for (const model of modelsToTry) {
       try {
@@ -145,6 +145,7 @@ ${message}`
       reply: geminiResult.text,
       source: "gemini",
       model: geminiResult.model,
+      hasGeminiKey: true,
     });
     return;
   }
@@ -239,7 +240,12 @@ Analisei sua proposta sob as melhores práticas de gestão de projetos e viabili
 - Quer definir um cronograma de 90 dias passo a passo?`;
   }
 
-  res.json({ reply, source: "local", model: "nexus-local-v1" });
+  res.json({
+    reply,
+    source: "local",
+    model: "nexus-local-v1",
+    hasGeminiKey: Boolean(process.env.GEMINI_API_KEY),
+  });
 });
 
 // Nexus AI Project analysis endpoint
