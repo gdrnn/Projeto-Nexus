@@ -55,7 +55,7 @@ export const RiskCenter: React.FC<RiskCenterProps> = ({ onAskAIAboutRisk }) => {
   ];
 
   return (
-    <section id="riscos" className="py-16 sm:py-24 max-w-7xl mx-auto px-4 sm:px-6">
+    <section id="riscos" className="py-16 sm:py-24 max-w-7xl mx-auto px-4 sm:px-6 scroll-mt-20">
       <div className="text-center max-w-2xl mx-auto mb-14">
         <span className="text-[11px] font-extrabold tracking-[3px] text-cyan-400 uppercase">
           RISK MANAGEMENT CENTER

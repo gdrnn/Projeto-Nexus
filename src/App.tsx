@@ -129,14 +129,69 @@ export default function App() {
     setActiveTab(tab);
     if (tab === "home") {
       window.scrollTo({ top: 0, behavior: "smooth" });
+      try {
+        window.history.replaceState(null, "", "#home");
+      } catch (_) {}
       return;
     }
 
     const element = document.getElementById(tab);
     if (element) {
       element.scrollIntoView({ behavior: "smooth", block: "start" });
+      try {
+        window.history.replaceState(null, "", `#${tab}`);
+      } catch (_) {}
     }
   };
+
+  // Scroll spy to synchronize active tab with visible section
+  useEffect(() => {
+    const tabs: ActiveTab[] = [
+      "home",
+      "ai",
+      "projeto",
+      "mapa",
+      "dashboard",
+      "simulador",
+      "riscos",
+      "conquistas",
+    ];
+
+    const handleScroll = () => {
+      const scrollPos = window.scrollY + 140;
+      for (let i = tabs.length - 1; i >= 0; i--) {
+        const tab = tabs[i];
+        const el = document.getElementById(tab);
+        if (el && el.offsetTop <= scrollPos) {
+          setActiveTab(tab);
+          break;
+        }
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // Handle URL hash on initial load
+  useEffect(() => {
+    const hash = window.location.hash.replace("#", "") as ActiveTab;
+    const validTabs: ActiveTab[] = [
+      "home",
+      "ai",
+      "projeto",
+      "mapa",
+      "dashboard",
+      "simulador",
+      "riscos",
+      "conquistas",
+    ];
+    if (hash && validTabs.includes(hash)) {
+      setTimeout(() => {
+        handleNavigate(hash);
+      }, 150);
+    }
+  }, []);
 
   // Auth Handlers
   const handleLoginSuccess = (user: User) => {
@@ -300,10 +355,13 @@ export default function App() {
       <Header
         activeTab={activeTab}
         onNavigate={handleNavigate}
+        setActiveTab={handleNavigate}
         currentUser={currentUser}
         onOpenAuth={() => setIsAuthOpen(true)}
         onLogout={handleLogout}
         notifications={notifications}
+        unreadCount={notifications.filter((n) => !n.read).length}
+        isPushActive={isPushActive}
         onOpenNotifications={() => setIsNotifOpen(true)}
         onInstallApp={handleInstallApp}
         isInstallable={!!installPrompt}

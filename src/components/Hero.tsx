@@ -30,7 +30,7 @@ export const Hero: React.FC<HeroProps> = ({
     totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : 75;
 
   return (
-    <section className="relative overflow-hidden pt-12 pb-20 sm:pt-20 sm:pb-28">
+    <section id="home" className="relative overflow-hidden pt-12 pb-20 sm:pt-20 sm:pb-28 scroll-mt-20">
       {/* Background ambient orbs */}
       <div className="absolute top-1/4 -left-32 w-96 h-96 rounded-full bg-cyan-500/10 blur-3xl pointer-events-none" />
       <div className="absolute top-1/3 -right-32 w-96 h-96 rounded-full bg-purple-500/10 blur-3xl pointer-events-none" />

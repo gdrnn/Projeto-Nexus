@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { User, ActiveTab } from "../types";
+import { User, ActiveTab, NexusNotification } from "../types";
 import {
   Bell,
   Sparkles,
@@ -20,31 +20,46 @@ import {
 
 interface HeaderProps {
   activeTab: ActiveTab;
-  setActiveTab: (tab: ActiveTab) => void;
+  onNavigate?: (tab: ActiveTab) => void;
+  setActiveTab?: (tab: ActiveTab) => void;
   currentUser: User | null;
-  unreadCount: number;
-  isPushActive: boolean;
+  unreadCount?: number;
+  notifications?: NexusNotification[];
+  isPushActive?: boolean;
   onOpenAuth: (mode?: "login" | "signup") => void;
   onLogout: () => void;
   onOpenNotifications: () => void;
   onInstallPwa?: () => void;
+  onInstallApp?: () => void;
   canInstallPwa?: boolean;
+  isInstallable?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   activeTab,
+  onNavigate,
   setActiveTab,
   currentUser,
   unreadCount,
-  isPushActive,
+  notifications,
+  isPushActive = false,
   onOpenAuth,
   onLogout,
   onOpenNotifications,
   onInstallPwa,
+  onInstallApp,
   canInstallPwa,
+  isInstallable,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+
+  const effectiveUnreadCount =
+    unreadCount ??
+    (notifications ? notifications.filter((n) => !n.read).length : 0);
+
+  const installAction = onInstallPwa ?? onInstallApp;
+  const showInstall = Boolean(canInstallPwa || isInstallable);
 
   const navItems: { id: ActiveTab; label: string; icon: React.ReactNode }[] = [
     { id: "home", label: "Início", icon: <Layers className="w-4 h-4" /> },
@@ -58,9 +73,25 @@ export const Header: React.FC<HeaderProps> = ({
   ];
 
   const handleNavClick = (tab: ActiveTab) => {
-    setActiveTab(tab);
     setMobileMenuOpen(false);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+
+    if (onNavigate) {
+      onNavigate(tab);
+      return;
+    }
+
+    if (setActiveTab) {
+      setActiveTab(tab);
+    }
+
+    if (tab === "home") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      const el = document.getElementById(tab);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }
   };
 
   return (
@@ -108,10 +139,10 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Right Header Actions */}
         <div className="flex items-center gap-2.5 sm:gap-3">
           {/* PWA Install Button (if available) */}
-          {canInstallPwa && onInstallPwa && (
+          {showInstall && installAction && (
             <button
               id="header-pwa-install-btn"
-              onClick={onInstallPwa}
+              onClick={installAction}
               className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-semibold text-slate-200 border border-white/10 transition"
               title="Instalar aplicativo"
             >
@@ -129,12 +160,12 @@ export const Header: React.FC<HeaderProps> = ({
             aria-label="Abrir notificações"
           >
             <Bell className="w-4 h-4 group-hover:rotate-12 transition-transform" />
-            {unreadCount > 0 && (
+            {effectiveUnreadCount > 0 && (
               <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-cyan-500 text-[10px] font-bold text-slate-950 shadow-[0_0_10px_rgba(0,212,255,0.6)] animate-pulse">
-                {unreadCount > 9 ? "9+" : unreadCount}
+                {effectiveUnreadCount > 9 ? "9+" : effectiveUnreadCount}
               </span>
             )}
-            {isPushActive && unreadCount === 0 && (
+            {isPushActive && effectiveUnreadCount === 0 && (
               <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-[#07090e]" />
             )}
           </button>

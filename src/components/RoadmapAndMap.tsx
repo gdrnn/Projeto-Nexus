@@ -133,7 +133,7 @@ export const RoadmapAndMap: React.FC<RoadmapAndMapProps> = ({ showToast }) => {
   };
 
   return (
-    <section id="mapa" className="py-16 sm:py-24 max-w-7xl mx-auto px-4 sm:px-6">
+    <section id="mapa" className="py-16 sm:py-24 max-w-7xl mx-auto px-4 sm:px-6 scroll-mt-20">
       {/* Title */}
       <div className="text-center max-w-2xl mx-auto mb-16">
         <span className="text-[11px] font-extrabold tracking-[3px] text-cyan-400 uppercase">
